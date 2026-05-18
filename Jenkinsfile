@@ -353,8 +353,7 @@ pipeline {
                     status = sh returnStatus: true, script: '''
                         curl -fLsS -o bridge.zip $BRIDGECLI_LINUX64 && \
                         unzip -qo -d $WORKSPACE_TMP bridge.zip && \
-                        rm -f bridge.zip
-                        
+                        rm -f bridge.zip && \
                         $WORKSPACE_TMP/bridge-cli-bundle-linux64/bridge-cli --stage srm
                     '''
                     
