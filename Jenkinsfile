@@ -13,18 +13,15 @@ pipeline {
         WOLF_TEST_PORT = "9096" 
         PROD_PORT = "8099"
         WOLF_PROD_PORT = "9092"
-	COMMON_VERSION = "Build-${env.BUILD_NUMBER}"        
+        COMMON_VERSION = "Build-${env.BUILD_NUMBER}"        
         SEEKER_SERVER_URL  = "http://192.168.12.190:8082"
         SEEKER_PROJECT_KEY = "webgoat-2025-demo-v1"
-     
         JENKINS_NODE_COOKIE = "dontKillMe"
         TZ = "Asia/Ho_Chi_Minh"
-	BRIDGE_SRM_URL = "http://192.168.12.190:6060"
-        BRIDGE_SRM_APIKEY = credentials('srm-api-token')
-        BRIDGE_SRM_PROJECT_NAME = "webgoat-2025-demo"
-        BRIDGE_SRM_BRANCH_NAME = "main" // Có thể thay bằng ${env.BRANCH_NAME} nếu dùng multibranch
-	BRIDGE_SRM_ASSESSMENT_TYPES = "SAST,SCA,IAST"
-        BRIDGECLI_LINUX64 = "https://repo.blackduck.com/artifactory/bds-integrations-release/com/blackduck/integration/bridge/binaries/bridge-cli-bundle/latest/bridge-cli-bundle-linux64.zip"
+        
+        // --- CẤU HÌNH SRM CHO CODE DX PLUGIN ---
+        SRM_SERVER_URL  = "http://192.168.12.190:6060/srm"
+        SRM_PROJECT_ID  = "1" // Project ID của bạn
     }
     
     stages {
@@ -33,8 +30,8 @@ pipeline {
                 script {
                     echo "[Build] Compiling latest WebGoat..."
                     sh "chmod +x mvnw"
-		    sh "./mvnw clean package -DskipTests -Dmaven.test.skip=true -DskipITs -Dprocess.skip=true"                    
-                    // Tối ưu: Tìm và lưu đường dẫn JAR 1 lần duy nhất, tái sử dụng cho toàn Pipeline
+                    sh "./mvnw clean package -DskipTests -Dmaven.test.skip=true -DskipITs -Dprocess.skip=true"          
+                    
                     env.WEBGOAT_JAR = sh(script: 'find . -type f -name "webgoat-*.jar" | grep -v "original" | grep -v "webwolf" | grep -v "deploy_prod" | head -n 1', returnStdout: true).trim()
                     if (!env.WEBGOAT_JAR) error "❌ ERROR: No compiled JAR file found!"
                     echo "✅ Found JAR for Pipeline: ${env.WEBGOAT_JAR}"
@@ -55,7 +52,7 @@ pipeline {
                                 --blackduck.api.token="\$BLACKDUCK_API_TOKEN" \\
                                 --blackduck.trust.cert=true \\
                                 --detect.project.name="${SEEKER_PROJECT_KEY}" \\
-				--detect.project.version.name="${COMMON_VERSION}" \\
+                                --detect.project.version.name="${COMMON_VERSION}" \\
                                 --detect.binary.scan.file.path="${env.WEBGOAT_JAR}" \\
                                 --detect.tools=DETECTOR,SIGNATURE_SCAN,BINARY_SCAN
                         """
@@ -88,7 +85,7 @@ pipeline {
                             --url ${covUrl} \
                             --stream webgoat-stream \
                             --user \$COV_USER --password \$COV_PASS \
-			    --version "${COMMON_VERSION}" \
+                            --version "${COMMON_VERSION}" \
                             --description "WebGoat Build ${env.BUILD_NUMBER}" 
                         """
                         
@@ -116,7 +113,6 @@ pipeline {
                         docker save -o webgoat-docker.tar webgoat-docker-demo:latest
                         chmod 777 webgoat-docker.tar
                         
-                        # Tối ưu: Xóa Image gốc khỏi Docker để tránh đầy ổ cứng
                         docker rmi webgoat-docker-demo:latest || true
                     """
                     
@@ -127,13 +123,12 @@ pipeline {
                                 --blackduck.api.token="\$BLACKDUCK_API_TOKEN" \\
                                 --blackduck.trust.cert=true \\
                                 --detect.project.name="${SEEKER_PROJECT_KEY}-docker" \\
-				--detect.project.version.name="Build-${env.BUILD_NUMBER}" \
+                                --detect.project.version.name="Build-${env.BUILD_NUMBER}" \\
                                 --detect.container.scan.file.path="webgoat-docker.tar" \\
                                 --detect.tools=CONTAINER_SCAN
                         """
                     }
                     
-                    // Tối ưu: Dọn dẹp file rác ngay sau khi quét xong
                     sh "rm -f webgoat-docker.tar Dockerfile"
                 }
             }
@@ -178,7 +173,7 @@ pipeline {
                                 -javaagent:${WORKSPACE}/seeker/seeker-agent.jar \\
                                 -Dseeker.server.url=${SEEKER_SERVER_URL} \\
                                 -Dseeker.project.key=${SEEKER_PROJECT_KEY} \\
-				-Dseeker.project.version=${COMMON_VERSION} \\
+                                -Dseeker.project.version=${COMMON_VERSION} \\
                                 -jar ${env.WEBGOAT_JAR} \\
                                 --server.address=0.0.0.0 \\
                                 --webgoat.port=${TEST_PORT} \\
@@ -209,7 +204,6 @@ pipeline {
                     }
 
                     if (!isReady) error "Timeout: Services did not start."
-
                     echo "[Traffic] Executing Basic Register & Login Test..."
                     sh """
                         # Test Register
@@ -323,7 +317,7 @@ pipeline {
 
                     echo "Waiting for Production WebGoat & WebWolf to initialize..."
                     boolean prodReady = false
-          
+ 
                     for (int i = 1; i <= 60; i++) {
                         def gStatus = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:${PROD_PORT}/WebGoat/login || echo '000'", returnStdout: true).trim()
                         def wStatus = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:${WOLF_PROD_PORT}/WebWolf/login || echo '000'", returnStdout: true).trim()
@@ -348,21 +342,16 @@ pipeline {
                 } 
             } 
         } 
-	stage('9. SRM Scan') {
+        
+        stage('9. Run SRM Analysis & Version Tagging') {
             steps {
                 script {
-                    status = sh returnStatus: true, script: '''
-                        curl -fLsS -o bridge.zip $BRIDGECLI_LINUX64 && \
-                        unzip -qo -d $WORKSPACE_TMP bridge.zip && \
-                        rm -f bridge.zip && \
-                        $WORKSPACE_TMP/bridge-cli-bundle-linux64/bridge-cli --stage srm
-                    '''
+                    echo "[SRM] Kích hoạt quá trình gom dữ liệu từ Tool Connectors..."
                     
-                    if (status == 8) {
-                        unstable 'policy violation'
-                    } else if (status != 0) {
-                        error 'bridge failure'
-                    }
+                    // Lệnh này gọi trực tiếp đến plugin Code Dx (SRM)
+                    codedx projectId: "${SRM_PROJECT_ID}", 
+                           serverUrl: "${SRM_SERVER_URL}", 
+                           credentialsId: 'srm-api-token'
                 }
             }
         }
