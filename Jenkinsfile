@@ -23,6 +23,7 @@ pipeline {
         BRIDGE_SRM_APIKEY = credentials('srm-api-token')
         BRIDGE_SRM_PROJECT_NAME = "webgoat-2025-demo"
         BRIDGE_SRM_BRANCH_NAME = "main" // Có thể thay bằng ${env.BRANCH_NAME} nếu dùng multibranch
+	BRIDGE_SRM_ASSESSMENT_TYPES = "SAST,SCA,IAST"
         BRIDGECLI_LINUX64 = "https://repo.blackduck.com/artifactory/bds-integrations-release/com/blackduck/integration/bridge/binaries/bridge-cli-bundle/latest/bridge-cli-bundle-linux64.zip"
     }
     
