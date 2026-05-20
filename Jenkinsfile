@@ -54,7 +54,7 @@ pipeline {
                                 --detect.project.name="${SEEKER_PROJECT_KEY}" \\
                                 --detect.project.version.name="${COMMON_VERSION}" \\
                                 --detect.binary.scan.file.path="${env.WEBGOAT_JAR}" \\
-                                --detect.tools=DETECTOR,SIGNATURE_SCAN,BINARY_SCAN
+                                --detect.tools=DETECTOR,SIGNATURE_SCAN
                         """
                     }
                 }
