@@ -330,7 +330,6 @@ pipeline {
                     echo "[SRM] Khởi tạo Analysis Prep và ép số Build vào bộ lọc Tags..."
                     
                     withCredentials([string(credentialsId: 'srm-api-token', variable: 'SRM_API_TOKEN')]) {
-                        // Thực hiện toàn bộ quy trình gọi và bóc tách bằng Shell Script của Linux
                         sh """
                             # 1. Gọi API bước 1 để lấy chuỗi phản hồi JSON từ SRM
                             RESPONSE=\$(curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep" \\
@@ -339,12 +338,12 @@ pipeline {
                                  -H "accept: application/json" \\
                                  -d '{"projectId": ${SRM_PROJECT_ID}}')
                             
-                            # 2. Dùng grep + cut của Linux để trích xuất thẳng số prepId (Bỏ qua mọi bộ lọc Java/Jenkins)
-                            PREP_ID=\$(echo "\$RESPONSE" | grep -o '"prepId":[0-9]*' | cut -d':' -f2)
+                            # 2. ĐÃ FIX: Hỗ trợ trích xuất chính xác mã định danh dạng chữ và số (Ví dụ: FJF2)
+                            PREP_ID=\$(echo "\$RESPONSE" | grep -o '"prepId":"[^"]*"' | cut -d':' -f2 | tr -d '"')
                             
-                            echo "✅ Đã tìm thấy mã kích hoạt (Prep ID) thông qua Shell: \$PREP_ID"
+                            echo "✅ Đã tìm thấy mã kích hoạt (Prep ID) chính xác: \$PREP_ID"
                             
-                            # 3. Gọi API bước 2 để ra lệnh SRM tự động 'Click Run' các Connectors & Đẩy luôn vào bộ lọc Tags
+                            # 3. Gọi API bước 2 để ra lệnh SRM tự động chạy ngầm Connectors & nạp bộ lọc Tags
                             curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep/\$PREP_ID/analyze" \\
                                  -H "API-Key: \$SRM_API_TOKEN" \\
                                  -H "Content-Type: application/json" \\
@@ -352,7 +351,7 @@ pipeline {
                                  -d "{\\"versionName\\": \\"${COMMON_VERSION}\\", \\"tags\\": [\\"${COMMON_VERSION}\\"]}"
                         """
                         
-                        echo "🚀 Kết nối hoàn tất! Kiểm tra ngay mục Tags ở giao diện SRM."
+                        echo "🚀 Kết nối hoàn tất! Kiểm tra ngay giao diện SRM."
                     }
                 }
             }
