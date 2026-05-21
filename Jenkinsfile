@@ -324,17 +324,19 @@ pipeline {
                 } 
             } 
         } 
-        
-	stage('9. Run SRM Analysis & Version Tagging') {
+        stage('9. Run SRM Analysis & Version Tagging') {
             steps {
                 script {
-                    echo "[SRM] Kích hoạt quá trình gom dữ liệu từ Tool Connectors..."
+                    echo "[SRM] Kích hoạt quá trình gom dữ liệu từ Tool Connectors qua Code Dx Plugin..."
                     
-                    // ĐÃ SỬA: Thêm thuộc tính versionName để SRM lưu trữ đúng số bản Build
-                    codedx projectId: "${SRM_PROJECT_ID}", 
-                           serverUrl: "${SRM_SERVER_URL}", 
-                           credentialsId: 'srm-api-token',
-                           versionName: "${COMMON_VERSION}"
+                    // Gọi plugin thông qua metastep chuẩn của Jenkins
+                    step([
+                        $class: 'CodeDxPublisher',
+                        url: "${SRM_SERVER_URL}",
+                        projectId: "${SRM_PROJECT_ID}",
+                        keyCredentialId: 'srm-api-token', // Tên tham số chính xác của plugin là keyCredentialId
+                        analysisName: "${COMMON_VERSION}"  // Truyền số Build Version (ví dụ: Build-12) lên SRM tại đây
+                    ])
                 }
             }
         }
