@@ -327,27 +327,34 @@ pipeline {
 	stage('9. Trigger SRM Tool Connectors & Versioning') {
             steps {
                 script {
-                    echo "[SRM] Khởi tạo Analysis Prep và ép chuỗi JSON chuẩn..."
+                    echo "[SRM] Đang thực hiện quy trình kích hoạt và gắn nhãn phiên bản chuẩn..."
                     
                     withCredentials([string(credentialsId: 'srm-api-token', variable: 'SRM_API_TOKEN')]) {
                         sh """
-                            # 1. Gọi API lấy Prep ID
+                            # Bước 1: Khởi tạo đợt nạp dữ liệu để lấy Prep ID
                             RESPONSE=\$(curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep" \\
                                  -H "API-Key: \$SRM_API_TOKEN" \\
                                  -H "Content-Type: application/json" \\
-                                 -H "accept: application/json" \\
                                  -d '{"projectId": ${SRM_PROJECT_ID}}')
                             
                             PREP_ID=\$(echo "\$RESPONSE" | grep -o '"prepId":"[^"]*"' | cut -d':' -f2 | tr -d '"')
+                            echo "✅ Có mã Prep ID: \$PREP_ID"
                             
-                            echo "✅ Đã tìm thấy mã kích hoạt (Prep ID): \$PREP_ID"
+                            # Bước 2: Kích hoạt chạy các Connectors ngầm (Lệnh này trả về analysisId)
+                            RUN_RESPONSE=\$(curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep/\$PREP_ID/analyze" \\
+                                 -H "API-Key: \$SRM_API_TOKEN" \\
+                                 -H "Content-Type: application/json")
                             
-                            # 3. ĐÃ FIX: Bọc dấu nháy đơn ngoài cùng để bảo vệ tuyệt đối chuỗi JSON gửi đi
-                            curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep/\$PREP_ID/analyze" \\
+                            ANALYSIS_ID=\$(echo "\$RUN_RESPONSE" | grep -o '"analysisId":[0-9]*' | cut -d':' -f2)
+                            echo "✅ Đã tạo lượt phân tích số: \$ANALYSIS_ID"
+                            
+                            # Bước 3: ĐY CHÍNH LÀ BƯỚC ĐÚNG - Gọi API áp tên phiên bản và Tags vào Analysis ID vừa tạo
+                            curl -k -X PUT "${SRM_SERVER_URL}/api/analyses/\$ANALYSIS_ID/metadata" \\
                                  -H "API-Key: \$SRM_API_TOKEN" \\
                                  -H "Content-Type: application/json" \\
-                                 -H "accept: application/json" \\
                                  -d '{"versionName": "${COMMON_VERSION}", "tags": ["${COMMON_VERSION}"]}'
+                            
+                            echo "🚀 Đã gắn thành công nhãn ${COMMON_VERSION} vào hệ thống!"
                         """
                     }
                 }
