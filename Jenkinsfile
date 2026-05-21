@@ -327,37 +327,32 @@ pipeline {
 	stage('9. Trigger SRM Tool Connectors & Versioning') {
             steps {
                 script {
-                    echo "[SRM] Khởi tạo Analysis Prep và kích hoạt Connectors..."
+                    echo "[SRM] Khởi tạo Analysis Prep và ép số Build vào bộ lọc Tags..."
                     
                     withCredentials([string(credentialsId: 'srm-api-token', variable: 'SRM_API_TOKEN')]) {
-                        
-                        // 1. Gọi API lấy chuỗi JSON thuần túy về
-                        def prepResponse = sh(
-                            script: """
-                                curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep" \\
-                                     -H "API-Key: \$SRM_API_TOKEN" \\
-                                     -H "Content-Type: application/json" \\
-                                     -H "accept: application/json" \\
-                                     -d '{"projectId": ${SRM_PROJECT_ID}}'
-                            """, 
-                            returnStdout: true
-                        ).trim()
-                        
-                        // 2. ĐÃ FIX: Gọi hàm @NonCPS để lấy prepId mà không làm kẹt bộ nhớ Jenkins
-                        def prepId = extractPrepId(prepResponse)
-                        
-                        echo "✅ Khởi tạo thành công trên SRM. Nhận được mã Prep ID: ${prepId}"
-                        
-                        // 3. Kích hoạt SRM chạy nốt các Connectors ngầm
+                        // Thực hiện toàn bộ quy trình gọi và bóc tách bằng Shell Script của Linux
                         sh """
-                            curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep/${prepId}/analyze" \\
+                            # 1. Gọi API bước 1 để lấy chuỗi phản hồi JSON từ SRM
+                            RESPONSE=\$(curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep" \\
                                  -H "API-Key: \$SRM_API_TOKEN" \\
                                  -H "Content-Type: application/json" \\
                                  -H "accept: application/json" \\
-                                 -d '{"versionName": "${COMMON_VERSION}"}'
+                                 -d '{"projectId": ${SRM_PROJECT_ID}}')
+                            
+                            # 2. Dùng grep + cut của Linux để trích xuất thẳng số prepId (Bỏ qua mọi bộ lọc Java/Jenkins)
+                            PREP_ID=\$(echo "\$RESPONSE" | grep -o '"prepId":[0-9]*' | cut -d':' -f2)
+                            
+                            echo "✅ Đã tìm thấy mã kích hoạt (Prep ID) thông qua Shell: \$PREP_ID"
+                            
+                            # 3. Gọi API bước 2 để ra lệnh SRM tự động 'Click Run' các Connectors & Đẩy luôn vào bộ lọc Tags
+                            curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep/\$PREP_ID/analyze" \\
+                                 -H "API-Key: \$SRM_API_TOKEN" \\
+                                 -H "Content-Type: application/json" \\
+                                 -H "accept: application/json" \\
+                                 -d "{\\"versionName\\": \\"${COMMON_VERSION}\\", \\"tags\\": [\\"${COMMON_VERSION}\\"]}"
                         """
                         
-                        echo "🚀 Đã ra lệnh thành công! SRM đang tự kích hoạt quét toàn bộ Connectors với nhãn: ${COMMON_VERSION}"
+                        echo "🚀 Kết nối hoàn tất! Kiểm tra ngay mục Tags ở giao diện SRM."
                     }
                 }
             }
