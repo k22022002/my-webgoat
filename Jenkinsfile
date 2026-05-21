@@ -324,19 +324,19 @@ pipeline {
                 } 
             } 
         } 
-        stage('9. Run SRM Analysis & Version Tagging') {
+	stage('9. Trigger SRM Tool Connectors & Versioning') {
             steps {
                 script {
-                    echo "[SRM] Kích hoạt quá trình gom dữ liệu từ Tool Connectors qua Code Dx Plugin..."
+                    echo "[SRM] --- Quy trình chuẩn: Kích hoạt SRM Tool Connectors & Đồng bộ Phiên bản ---"
                     
-                    // Gọi plugin thông qua metastep chuẩn của Jenkins
-                    step([
-                        $class: 'CodeDxPublisher',
-                        url: "${SRM_SERVER_URL}",
-                        projectId: "${SRM_PROJECT_ID}",
-                        keyCredentialId: 'srm-api-token', // Tên tham số chính xác của plugin là keyCredentialId
-                        analysisName: "${COMMON_VERSION}"  // Truyền số Build Version (ví dụ: Build-12) lên SRM tại đây
-                    ])
+                    // Sử dụng srm-api-token đã có sẵn trong Jenkins Credentials của bạn
+                    withCredentials([string(credentialsId: 'srm-api-token', variable: 'SRM_API_TOKEN')]) {
+                        sh """
+                            curl -k -X POST "${SRM_SERVER_URL}/api/projects/${SRM_PROJECT_ID}/analyses?versionName=${COMMON_VERSION}" \\
+                                 -H "API-Key: \$SRM_API_TOKEN" \\
+                                 -H "accept: application/json"
+                        """
+                    }
                 }
             }
         }
