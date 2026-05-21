@@ -327,11 +327,11 @@ pipeline {
 	stage('9. Trigger SRM Tool Connectors & Versioning') {
             steps {
                 script {
-                    echo "[SRM] Quy trình chuẩn hãng: Khởi tạo Analysis Prep và kích hoạt Connectors..."
+                    echo "[SRM] Khởi tạo Analysis Prep và kích hoạt Connectors..."
                     
                     withCredentials([string(credentialsId: 'srm-api-token', variable: 'SRM_API_TOKEN')]) {
                         
-                        // BƯỚC 1: Gọi API khởi tạo phiên để lấy mã prepId
+                        // 1. Gọi API lấy chuỗi JSON thuần túy về
                         def prepResponse = sh(
                             script: """
                                 curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep" \\
@@ -343,13 +343,12 @@ pipeline {
                             returnStdout: true
                         ).trim()
                         
-                        // Sử dụng thư viện JsonSlurper tích hợp sẵn của Jenkins để đọc mã prepId
-                        def json = new groovy.json.JsonSlurper().parseText(prepResponse)
-                        def prepId = json.prepId
+                        // 2. ĐÃ FIX: Gọi hàm @NonCPS để lấy prepId mà không làm kẹt bộ nhớ Jenkins
+                        def prepId = extractPrepId(prepResponse)
                         
                         echo "✅ Khởi tạo thành công trên SRM. Nhận được mã Prep ID: ${prepId}"
                         
-                        // BƯỚC 2: Gọi API chính thức ra lệnh cho SRM kích hoạt chạy các Tool Connectors
+                        // 3. Kích hoạt SRM chạy nốt các Connectors ngầm
                         sh """
                             curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep/${prepId}/analyze" \\
                                  -H "API-Key: \$SRM_API_TOKEN" \\
