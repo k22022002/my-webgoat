@@ -126,6 +126,7 @@ pipeline {
                                 --detect.project.version.name="Build-${env.BUILD_NUMBER}" \\
                                 --detect.container.scan.file.path="webgoat-docker.tar" \\
                                 --detect.tools=CONTAINER_SCAN
+				--detect.ignore.connection.failures=true \\
                         """
                     }
                     
