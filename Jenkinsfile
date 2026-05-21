@@ -327,15 +327,38 @@ pipeline {
 	stage('9. Trigger SRM Tool Connectors & Versioning') {
             steps {
                 script {
-                    echo "[SRM] --- Quy trình chuẩn: Kích hoạt SRM Tool Connectors & Đồng bộ Phiên bản ---"
+                    echo "[SRM] Quy trình chuẩn hãng: Khởi tạo Analysis Prep và kích hoạt Connectors..."
                     
-                    // Sử dụng srm-api-token đã có sẵn trong Jenkins Credentials của bạn
                     withCredentials([string(credentialsId: 'srm-api-token', variable: 'SRM_API_TOKEN')]) {
+                        
+                        // BƯỚC 1: Gọi API khởi tạo phiên để lấy mã prepId
+                        def prepResponse = sh(
+                            script: """
+                                curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep" \\
+                                     -H "API-Key: \$SRM_API_TOKEN" \\
+                                     -H "Content-Type: application/json" \\
+                                     -H "accept: application/json" \\
+                                     -d '{"projectId": ${SRM_PROJECT_ID}}'
+                            """, 
+                            returnStdout: true
+                        ).trim()
+                        
+                        // Sử dụng thư viện JsonSlurper tích hợp sẵn của Jenkins để đọc mã prepId
+                        def json = new groovy.json.JsonSlurper().parseText(prepResponse)
+                        def prepId = json.prepId
+                        
+                        echo "✅ Khởi tạo thành công trên SRM. Nhận được mã Prep ID: ${prepId}"
+                        
+                        // BƯỚC 2: Gọi API chính thức ra lệnh cho SRM kích hoạt chạy các Tool Connectors
                         sh """
-                            curl -k -X POST "${SRM_SERVER_URL}/api/projects/${SRM_PROJECT_ID}/analyses?versionName=${COMMON_VERSION}" \\
+                            curl -k -X POST "${SRM_SERVER_URL}/api/analysis-prep/${prepId}/analyze" \\
                                  -H "API-Key: \$SRM_API_TOKEN" \\
-                                 -H "accept: application/json"
+                                 -H "Content-Type: application/json" \\
+                                 -H "accept: application/json" \\
+                                 -d '{"versionName": "${COMMON_VERSION}"}'
                         """
+                        
+                        echo "🚀 Đã ra lệnh thành công! SRM đang tự kích hoạt quét toàn bộ Connectors với nhãn: ${COMMON_VERSION}"
                     }
                 }
             }
