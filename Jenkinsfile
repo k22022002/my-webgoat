@@ -99,42 +99,23 @@ pipeline {
             }
         }
         
-        stage('3. Build & Scan Docker Image') {
-            steps {
-                script {
-                    echo "[Docker] Building and Scanning Docker Image..."
-                    sh """
-                        echo "FROM eclipse-temurin:17-jre-alpine" > Dockerfile
-                        echo "COPY ${env.WEBGOAT_JAR} /app/webgoat.jar" >> Dockerfile
-                        echo "EXPOSE 8080" >> Dockerfile
-                        echo "ENTRYPOINT [\\"java\\", \\"-jar\\", \\"/app/webgoat.jar\\"]" >> Dockerfile
-                        
-                        docker build -t webgoat-docker-demo:latest .
-                        docker save -o webgoat-docker.tar webgoat-docker-demo:latest
-                        chmod 777 webgoat-docker.tar
-                        
-                        docker rmi webgoat-docker-demo:latest || true
-                    """
+	stage('3. Build Docker Image') {
+        steps {
+            script {
+                echo "[Docker] Building Docker Image..."
+                sh """
+                    echo "FROM eclipse-temurin:17-jre-alpine" > Dockerfile
+                    echo "COPY ${env.WEBGOAT_JAR} /app/webgoat.jar" >> Dockerfile
+                    echo "EXPOSE 8080" >> Dockerfile
+                    echo "ENTRYPOINT [\\"java\\", \\"-jar\\", \\"/app/webgoat.jar\\"]" >> Dockerfile
                     
-                    withCredentials([string(credentialsId: 'blackduck-api-token', variable: 'BLACKDUCK_API_TOKEN')]) {
-                        sh """
-                            ./detect10.sh \\
-                                --blackduck.url="https://192.168.12.204" \\
-                                --blackduck.api.token="\$BLACKDUCK_API_TOKEN" \\
-                                --blackduck.trust.cert=true \\
-                                --detect.project.name="${SEEKER_PROJECT_KEY}-docker" \\
-                                --detect.project.version.name="Build-${env.BUILD_NUMBER}" \\
-                                --detect.container.scan.file.path="webgoat-docker.tar" \\
-                                --detect.tools=CONTAINER_SCAN \\
-				--detect.ignore.connection.failures=true \\
-                        """
-                    }
-                    
-                    sh "rm -f webgoat-docker.tar Dockerfile"
-                }
+                    docker build -t webgoat-docker-demo:latest .
+                """
+                
+                sh "rm -f Dockerfile"
             }
         }
-        
+    }        
         stage('4. Setup Seeker Agent') {
             steps {
                 script {
@@ -344,15 +325,16 @@ pipeline {
             } 
         } 
         
-        stage('9. Run SRM Analysis & Version Tagging') {
+	stage('9. Run SRM Analysis & Version Tagging') {
             steps {
                 script {
                     echo "[SRM] Kích hoạt quá trình gom dữ liệu từ Tool Connectors..."
                     
-                    // Lệnh này gọi trực tiếp đến plugin Code Dx (SRM)
+                    // ĐÃ SỬA: Thêm thuộc tính versionName để SRM lưu trữ đúng số bản Build
                     codedx projectId: "${SRM_PROJECT_ID}", 
                            serverUrl: "${SRM_SERVER_URL}", 
-                           credentialsId: 'srm-api-token'
+                           credentialsId: 'srm-api-token',
+                           versionName: "${COMMON_VERSION}"
                 }
             }
         }
