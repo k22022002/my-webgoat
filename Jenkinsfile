@@ -298,7 +298,6 @@ pipeline {
             --webwolf.server.directory=${deployDir}/webwolf-data \\
             > ${deployDir}/app_webgoat_prod.log 2>&1 < /dev/null &
     """
-}
                     }
 
                     echo "Waiting for Production WebGoat & WebWolf to initialize..."
