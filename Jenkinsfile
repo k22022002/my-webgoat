@@ -146,7 +146,6 @@ pipeline {
 
                     withCredentials([string(credentialsId: 'seeker-agent-token', variable: 'SEEKER_ACCESS_TOKEN')]) {
                         sh """
-                            export SEEKER_ACCESS_TOKEN=${SEEKER_ACCESS_TOKEN}
                             nohup java \\
                                 -Dfile.encoding=UTF-8 \\
                                 -Duser.timezone=${TZ} \\
@@ -156,7 +155,8 @@ pipeline {
                                 -Dseeker.server.url=${SEEKER_SERVER_URL} \\
                                 -Dseeker.project.key=${SEEKER_PROJECT_KEY} \\
                                 -Dseeker.project.version=${COMMON_VERSION} \\
-                                -jar ${env.WEBGOAT_JAR} \\
+                                -Dseeker.agent.accessToken=${SEEKER_ACCESS_TOKEN} \
+				-jar ${env.WEBGOAT_JAR} \\
                                 --server.address=0.0.0.0 \\
                                 --webgoat.port=${TEST_PORT} \\
                                 --webwolf.port=${WOLF_TEST_PORT} \\
@@ -276,25 +276,29 @@ pipeline {
                         
                         chmod -R 777 ${deployDir}/webgoat-data ${deployDir}/webwolf-data
                     """
+		    withCredentials([string(credentialsId: 'seeker-agent-token', variable: 'SEEKER_ACCESS_TOKEN')]) {
+    sh """
+        # 1. Đảm bảo Jenkins không can thiệp tắt ứng dụng sau khi kết thúc build
+        export JENKINS_NODE_COOKIE=dontKillMe
 
-                    withCredentials([string(credentialsId: 'seeker-agent-token', variable: 'SEEKER_ACCESS_TOKEN')]) {
-                        sh """
-                            export SEEKER_ACCESS_TOKEN=${SEEKER_ACCESS_TOKEN}
-                            nohup java -Xmx2g \\
-                                -Dfile.encoding=UTF-8 \\
-                                -Duser.timezone=${TZ} \\
-                                -javaagent:${deployDir}/seeker/seeker-agent.jar \\
-                                -Dseeker.server.url=${SEEKER_SERVER_URL} \\
-                                -Dseeker.project.key=${SEEKER_PROJECT_KEY} \\
-                                -jar ${deployDir}/webgoat-app.jar \\
-                                --server.address=0.0.0.0 \\
-                                --webgoat.port=${PROD_PORT} \\
-                                --webwolf.port=${WOLF_PROD_PORT} \\
-                                --webwolf.address=0.0.0.0 \\
-                                --webgoat.server.directory=${deployDir}/webgoat-data \\
-                                --webwolf.server.directory=${deployDir}/webwolf-data \\
-                                > ${deployDir}/app_webgoat_prod.log 2>&1 < /dev/null &
-                        """
+        nohup java -Xmx2g \\
+            -Dfile.encoding=UTF-8 \\
+            -Duser.timezone=${TZ} \\
+            -javaagent:${deployDir}/seeker/seeker-agent.jar \\
+            -Dseeker.server.url=${SEEKER_SERVER_URL} \\
+            -Dseeker.project.key=${SEEKER_PROJECT_KEY} \\
+            -Dseeker.project.version=${COMMON_VERSION} \\
+            -Dseeker.agent.accessToken=${SEEKER_ACCESS_TOKEN} \\
+            -jar ${deployDir}/webgoat-app.jar \\
+            --server.address=0.0.0.0 \\
+            --webgoat.port=${PROD_PORT} \\
+            --webwolf.port=${WOLF_PROD_PORT} \\
+            --webwolf.address=0.0.0.0 \\
+            --webgoat.server.directory=${deployDir}/webgoat-data \\
+            --webwolf.server.directory=${deployDir}/webwolf-data \\
+            > ${deployDir}/app_webgoat_prod.log 2>&1 < /dev/null &
+    """
+}
                     }
 
                     echo "Waiting for Production WebGoat & WebWolf to initialize..."
